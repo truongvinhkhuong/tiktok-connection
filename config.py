@@ -15,13 +15,13 @@ class Config:
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
     HOST = os.getenv('FLASK_HOST', '0.0.0.0')
-    PORT = int(os.getenv('FLASK_PORT', 5000))
+    PORT = int(os.getenv('FLASK_PORT', 5001))
     USE_SSL = os.getenv('USE_SSL', 'true').lower() == 'true'
     
     # TikTok Shop OAuth
-    TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY')
+    TIKTOK_CLIENT_KEY = os.getenv('TIKTOK_CLIENT_KEY', '6h2cosrqj39gj')
     TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
-    TIKTOK_REDIRECT_URI = os.getenv('TIKTOK_REDIRECT_URI')
+    TIKTOK_REDIRECT_URI = os.getenv('TIKTOK_REDIRECT_URI', 'https://tiktok.truongvinhkhuong.io.vn/callback')
     
     # TikTok API URLs
     TIKTOK_AUTH_URL = 'https://partner.tiktokshop.com/authorization/oauth/auth'
@@ -77,7 +77,7 @@ class Config:
 class DevelopmentConfig(Config):
     """Development configuration"""
     DEBUG = True
-    USE_SSL = False  # Disable SSL in development
+    USE_SSL = False  # Disable SSL in development for easier local testing
 
 class ProductionConfig(Config):
     """Production configuration"""

@@ -186,29 +186,234 @@ def index():
     oauth_url = Config.get_tiktok_auth_url(state)
     
     return f"""
-    <h1>🚀 TikTok Shop OAuth Callback</h1>
-    <p>Ứng dụng xử lý OAuth callback từ TikTok Shop Partner API</p>
-    
-    <h2>📋 Thông tin ứng dụng:</h2>
-    <ul>
-        <li><strong>Client Key:</strong> {Config.TIKTOK_CLIENT_KEY}</li>
-        <li><strong>Redirect URI:</strong> {Config.TIKTOK_REDIRECT_URI}</li>
-        <li><strong>Token URL:</strong> {Config.TIKTOK_TOKEN_URL}</li>
-        <li><strong>Scope:</strong> {', '.join(Config.OAUTH_SCOPES)}</li>
-    </ul>
-    
-    <h2>🔗 Bắt đầu OAuth Flow:</h2>
-    <p><a href="{oauth_url}" target="_blank" style="display: inline-block; padding: 10px 20px; background-color: #00aaaa; color: white; text-decoration: none; border-radius: 5px;">Authorize with TikTok Shop</a></p>
-    
-    <h2>📊 API Endpoints:</h2>
-    <ul>
-        <li><code>GET /callback</code> - OAuth callback endpoint</li>
-        <li><code>GET /token/info</code> - Thông tin token hiện tại</li>
-        <li><code>GET /token/clear</code> - Xóa token khỏi session</li>
-        <li><code>GET /health</code> - Health check</li>
-    </ul>
-    
-    <p><small>🔒 Ứng dụng được bảo vệ bởi rate limiting và các biện pháp bảo mật khác.</small></p>
+    <!DOCTYPE html>
+    <html lang="vi">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>TikTok Shop OAuth Callback</title>
+        <style>
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            
+            body {{
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(135deg, #2A95BF 0%, #1a7a9e 100%);
+                min-height: 100vh;
+                color: #333;
+            }}
+            
+            .container {{
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            
+            .header {{
+                text-align: center;
+                margin-bottom: 40px;
+                color: white;
+            }}
+            
+            .header h1 {{
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+                font-weight: 300;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            }}
+            
+            .header p {{
+                font-size: 1.1rem;
+                opacity: 0.9;
+            }}
+            
+            .card {{
+                background: white;
+                border-radius: 15px;
+                padding: 30px;
+                margin-bottom: 30px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                border: 1px solid rgba(42, 149, 191, 0.1);
+            }}
+            
+            .card h2 {{
+                color: #2A95BF;
+                font-size: 1.5rem;
+                margin-bottom: 20px;
+                font-weight: 600;
+                border-bottom: 2px solid #2A95BF;
+                padding-bottom: 10px;
+            }}
+            
+            .info-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-bottom: 20px;
+            }}
+            
+            .info-item {{
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                border-left: 4px solid #2A95BF;
+            }}
+            
+            .info-item strong {{
+                color: #2A95BF;
+                display: block;
+                margin-bottom: 5px;
+            }}
+            
+            .oauth-button {{
+                display: inline-block;
+                background: linear-gradient(45deg, #2A95BF, #1a7a9e);
+                color: white;
+                padding: 15px 30px;
+                text-decoration: none;
+                border-radius: 25px;
+                font-weight: 600;
+                font-size: 1.1rem;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 15px rgba(42, 149, 191, 0.3);
+                border: none;
+                cursor: pointer;
+            }}
+            
+            .oauth-button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(42, 149, 191, 0.4);
+                background: linear-gradient(45deg, #1a7a9e, #2A95BF);
+            }}
+            
+            .endpoints {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 15px;
+            }}
+            
+            .endpoint-item {{
+                background: #f8f9fa;
+                padding: 15px;
+                border-radius: 8px;
+                border: 1px solid #e9ecef;
+            }}
+            
+            .endpoint-item code {{
+                background: #2A95BF;
+                color: white;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.9rem;
+            }}
+            
+            .endpoint-item p {{
+                margin-top: 8px;
+                color: #666;
+                font-size: 0.9rem;
+            }}
+            
+            .security-note {{
+                background: linear-gradient(45deg, #2A95BF, #1a7a9e);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+                margin-top: 30px;
+            }}
+            
+            .security-note small {{
+                font-size: 0.9rem;
+                opacity: 0.9;
+            }}
+            
+            @media (max-width: 768px) {{
+                .container {{
+                    padding: 15px;
+                }}
+                
+                .header h1 {{
+                    font-size: 2rem;
+                }}
+                
+                .card {{
+                    padding: 20px;
+                }}
+                
+                .info-grid {{
+                    grid-template-columns: 1fr;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>TikTok Shop OAuth Callback</h1>
+                <p>Ứng dụng xử lý OAuth callback từ TikTok Shop Partner API</p>
+            </div>
+            
+            <div class="card">
+                <h2>Thông tin ứng dụng</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <strong>Client Key</strong>
+                        {Config.TIKTOK_CLIENT_KEY}
+                    </div>
+                    <div class="info-item">
+                        <strong>Redirect URI</strong>
+                        {Config.TIKTOK_REDIRECT_URI}
+                    </div>
+                    <div class="info-item">
+                        <strong>Token URL</strong>
+                        {Config.TIKTOK_TOKEN_URL}
+                    </div>
+                    <div class="info-item">
+                        <strong>Scope</strong>
+                        {', '.join(Config.OAUTH_SCOPES)}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Bắt đầu OAuth Flow</h2>
+                <p style="margin-bottom: 20px; color: #666;">
+                    Nhấn nút bên dưới để bắt đầu quá trình xác thực với TikTok Shop
+                </p>
+                <a href="{oauth_url}" target="_blank" class="oauth-button">
+                    Authorize with TikTok Shop
+                </a>
+            </div>
+            
+            <div class="card">
+                <h2>API Endpoints</h2>
+                <div class="endpoints">
+                    <div class="endpoint-item">
+                        <code>GET /callback</code>
+                        <p>OAuth callback endpoint</p>
+                    </div>
+                    <div class="endpoint-item">
+                        <code>GET /token/info</code>
+                        <p>Thông tin token hiện tại</p>
+                    </div>
+                    <div class="endpoint-item">
+                        <code>GET /token/clear</code>
+                        <p>Xóa token khỏi session</p>
+                    </div>
+                    <div class="endpoint-item">
+                        <code>GET /health</code>
+                        <p>Health check endpoint</p>
+                    </div>
+                </div>
+            </div>
+            
+           
+        </div>
+    </body>
+    </html>
     """
 
 @app.route('/callback')
@@ -471,8 +676,13 @@ if __name__ == "__main__":
     ssl_context = None
     if Config.USE_SSL:
         try:
+            # Kiểm tra xem có cryptography library không
+            import cryptography
             ssl_context = 'adhoc'  # Tự động tạo SSL certificate cho development
             logger.info("Sử dụng HTTPS với adhoc SSL context")
+        except ImportError:
+            logger.warning("Thiếu thư viện cryptography. Chạy với HTTP. Cài đặt: pip install cryptography")
+            ssl_context = None
         except Exception as e:
             logger.warning(f"Không thể tạo SSL context: {e}. Chạy với HTTP")
             ssl_context = None

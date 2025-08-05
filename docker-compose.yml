@@ -16,6 +16,7 @@ services:
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
+    network_mode: host
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
       interval: 30s

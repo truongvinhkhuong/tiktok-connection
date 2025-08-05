@@ -7,6 +7,7 @@ services:
       - "5002:5001"
     environment:
       - FLASK_ENV=production
+      - FLASK_DEBUG=false
       - FLASK_HOST=0.0.0.0
       - FLASK_PORT=5001
       - USE_SSL=false

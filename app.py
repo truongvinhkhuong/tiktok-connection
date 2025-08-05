@@ -101,11 +101,39 @@ def exchange_code_for_token(authorization_code):
     try:
         logger.info(f"Gửi request lấy access token tới {Config.TIKTOK_TOKEN_URL}")
         
-        response = requests.post(
+        # Test DNS resolution first
+        import socket
+        try:
+            host = 'partner-api.tiktokshop.com'
+            ip = socket.gethostbyname(host)
+            logger.info(f"DNS resolution successful: {host} -> {ip}")
+        except socket.gaierror as e:
+            logger.error(f"DNS resolution failed for {host}: {e}")
+            return {
+                'success': False,
+                'error': 'Không thể resolve domain TikTok',
+                'details': f"DNS resolution failed: {str(e)}"
+            }
+        
+        # Use session with retry logic
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        
+        session = requests.Session()
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[429, 500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        
+        response = session.post(
             Config.TIKTOK_TOKEN_URL,
             data=token_data,
             headers=headers,
-            timeout=30
+            timeout=(10, 30)  # (connect_timeout, read_timeout)
         )
         
         logger.info(f"Response status code: {response.status_code}")

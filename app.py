@@ -8,13 +8,114 @@ import logging
 import requests
 import json
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, session, redirect, url_for
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template
 from werkzeug.exceptions import BadRequest
 import secrets
+import hmac
+import hashlib
+from urllib.parse import urlparse
+from functools import wraps
+import time
+from collections import defaultdict
 
 # Import custom modules
 from config import Config
 from security import security_manager, rate_limit, require_https, SecurityManager
+
+def generate_sign(request_option, app_secret):
+    """
+    Generate HMAC-SHA256 signature for TikTok Shop API requests
+    :param request_option: Request options dictionary containing qs (query params), uri (path), headers, body etc.
+    :param app_secret: Secret key for signing
+    :return: Hexadecimal signature string
+    """
+    # Step 1: Extract and filter query parameters, exclude "access_token" and "sign", sort alphabetically
+    params = request_option.get('qs', {})
+    exclude_keys = ["access_token", "sign"]
+    sorted_params = [
+        {"key": key, "value": params[key]}
+        for key in sorted(params.keys())
+        if key not in exclude_keys
+    ]
+
+    # Step 2: Concatenate parameters in {key}{value} format
+    param_string = ''.join([f"{item['key']}{item['value']}" for item in sorted_params])
+    sign_string = param_string
+
+    # Step 3: Append API request path to the signature string
+    uri = request_option.get('uri', '')
+    pathname = urlparse(uri).path if uri else ''
+    sign_string = f"{pathname}{param_string}"
+
+    # Step 4: If not multipart/form-data and request body exists, append JSON-serialized body
+    content_type = request_option.get('headers', {}).get('content-type', '')
+    body = request_option.get('body', {})
+    if content_type != 'multipart/form-data' and body:
+        body_str = json.dumps(body)  # JSON serialization ensures consistency
+        sign_string += body_str
+
+    # Step 5: Wrap signature string with app_secret
+    wrapped_string = f"{app_secret}{sign_string}{app_secret}"
+
+    # Step 6: Encode using HMAC-SHA256 and generate hexadecimal signature
+    hmac_obj = hmac.new(
+        app_secret.encode('utf-8'),
+        wrapped_string.encode('utf-8'),
+        hashlib.sha256
+    )
+    sign = hmac_obj.hexdigest()
+    return sign
+
+def create_signed_request(access_token, app_key, app_secret, endpoint_path, params=None, body=None):
+    """
+    Create a signed request for TikTok Shop API
+    :param access_token: OAuth access token
+    :param app_key: App key
+    :param app_secret: App secret
+    :param endpoint_path: API endpoint path (e.g., '/api/shop/get_authorized_shop')
+    :param params: Query parameters (optional)
+    :param body: Request body (optional)
+    :return: Dictionary with signed request details
+    """
+    if params is None:
+        params = {}
+    
+    # Add required parameters
+    params['app_key'] = app_key
+    params['timestamp'] = str(int(time.time()))
+    params['version'] = '2'
+    params['shop_id'] = '0'  # Default shop_id, can be overridden
+    
+    # Create request option for signature generation
+    request_option = {
+        'qs': params,
+        'uri': f"{Config.TIKTOK_API_BASE_URL}{endpoint_path}",
+        'headers': {
+            'content-type': 'application/json' if body else 'application/x-www-form-urlencoded'
+        },
+        'body': body or {}
+    }
+    
+    # Generate signature
+    signature = generate_sign(request_option, app_secret)
+    
+    # Add signature to params
+    params['sign'] = signature
+    
+    # Build final URL
+    query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+    final_url = f"{Config.TIKTOK_API_BASE_URL}{endpoint_path}?{query_string}"
+    
+    return {
+        'url': final_url,
+        'params': params,
+        'signature': signature,
+        'headers': {
+            'Content-Type': 'application/json' if body else 'application/x-www-form-urlencoded',
+            'User-Agent': 'TikTokShopApp/1.0',
+            'Accept': 'application/json'
+        }
+    }
 
 # Cấu hình logging
 logging.basicConfig(
@@ -147,8 +248,17 @@ def exchange_code_for_token(authorization_code):
             token_response = response.json()
             logger.info("Nhận access token thành công")
             
-            # Validate response structure
-            if 'access_token' in token_response:
+            # Validate response structure - TikTok returns data in data.access_token
+            if 'data' in token_response and 'access_token' in token_response['data']:
+                # Extract token data from the nested structure
+                token_data = token_response['data']
+                return {
+                    'success': True,
+                    'data': token_data,
+                    'message': 'Lấy access token thành công'
+                }
+            elif 'access_token' in token_response:
+                # Fallback for direct access_token
                 return {
                     'success': True,
                     'data': token_response,
@@ -432,6 +542,14 @@ def index():
                         <p>Thông tin token hiện tại</p>
                     </div>
                     <div class="endpoint-item">
+                        <code>GET /api/signature-demo</code>
+                        <p>Demo signature generation</p>
+                    </div>
+                    <div class="endpoint-item">
+                        <code>GET /api/test-signed</code>
+                        <p>Test signed API request</p>
+                    </div>
+                    <div class="endpoint-item">
                         <code>GET /token/clear</code>
                         <p>Xóa token khỏi session</p>
                     </div>
@@ -480,12 +598,7 @@ def callback():
     validation_errors = validate_callback_params(code, state, error)
     if validation_errors:
         security_manager.log_security_event("INVALID_CALLBACK", f"Validation failed: {validation_errors}", ip_address)
-        return jsonify({
-            'success': False,
-            'errors': validation_errors,
-            'error_description': error_description,
-            'timestamp': datetime.now().isoformat()
-        }), 400
+        return render_oauth_result_page(False, validation_errors, error_description)
     
     # Exchange code for access token
     token_result = exchange_code_for_token(code)
@@ -493,37 +606,488 @@ def callback():
     if token_result['success']:
         # Lưu trữ token
         if store_token(token_result['data']):
-            response_data = {
-                'success': True,
-                'message': 'OAuth flow hoàn thành thành công',
-                'token_info': {
-                    'access_token': token_result['data']['access_token'][:10] + '...',  # Chỉ hiển thị một phần
-                    'token_type': token_result['data'].get('token_type', 'Bearer'),
-                    'expires_in': token_result['data'].get('expires_in', 3600),
-                    'scope': token_result['data'].get('scope', ''),
-                    'received_at': datetime.now().isoformat()
-                },
-                'next_steps': [
-                    'Token đã được lưu trữ an toàn',
-                    'Có thể bắt đầu gọi TikTok Shop API',
-                    'Nhớ refresh token trước khi hết hạn'
-                ]
-            }
-            
-            return jsonify(response_data), 200
+            return render_oauth_result_page(True, token_result['data'], "OAuth flow hoàn thành thành công")
         else:
-            return jsonify({
-                'success': False,
-                'error': 'Không thể lưu trữ token',
-                'timestamp': datetime.now().isoformat()
-            }), 500
+            return render_oauth_result_page(False, ["Không thể lưu trữ token"], "")
     else:
-        return jsonify({
-            'success': False,
-            'error': token_result['error'],
-            'details': token_result.get('details'),
-            'timestamp': datetime.now().isoformat()
-        }), 400
+        return render_oauth_result_page(False, [token_result['error']], token_result.get('details', ''))
+
+def render_oauth_result_page(success, data, message=""):
+    """Render HTML page với kết quả OAuth"""
+    
+    if success:
+        # Success page
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>TikTok Shop OAuth - Thành công</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }}
+                
+                .container {{
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    padding: 40px;
+                    max-width: 600px;
+                    width: 100%;
+                    text-align: center;
+                }}
+                
+                .success-icon {{
+                    width: 80px;
+                    height: 80px;
+                    background: #00d4aa;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 30px;
+                    animation: pulse 2s infinite;
+                }}
+                
+                @keyframes pulse {{
+                    0% {{ transform: scale(1); }}
+                    50% {{ transform: scale(1.05); }}
+                    100% {{ transform: scale(1); }}
+                }}
+                
+                .success-icon::before {{
+                    content: "✓";
+                    color: white;
+                    font-size: 40px;
+                    font-weight: bold;
+                }}
+                
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                    font-size: 28px;
+                }}
+                
+                .message {{
+                    color: #666;
+                    margin-bottom: 30px;
+                    font-size: 16px;
+                    line-height: 1.6;
+                }}
+                
+                .token-info {{
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                
+                .token-info h3 {{
+                    color: #333;
+                    margin-bottom: 15px;
+                    font-size: 18px;
+                }}
+                
+                .info-row {{
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 10px;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #eee;
+                }}
+                
+                .info-row:last-child {{
+                    border-bottom: none;
+                }}
+                
+                .info-label {{
+                    font-weight: 600;
+                    color: #555;
+                }}
+                
+                .info-value {{
+                    color: #333;
+                    word-break: break-all;
+                }}
+                
+                .token-preview {{
+                    background: #e3f2fd;
+                    border: 1px solid #2196f3;
+                    border-radius: 5px;
+                    padding: 10px;
+                    font-family: monospace;
+                    font-size: 12px;
+                    color: #1976d2;
+                    word-break: break-all;
+                }}
+                
+                .signature-info {{
+                    background: #fff3e0;
+                    border: 1px solid #ff9800;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                
+                .signature-info h3 {{
+                    color: #e65100;
+                    margin-bottom: 15px;
+                    font-size: 18px;
+                }}
+                
+                .next-steps {{
+                    background: #e8f5e8;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }}
+                
+                .next-steps h3 {{
+                    color: #2e7d32;
+                    margin-bottom: 15px;
+                }}
+                
+                .next-steps ul {{
+                    list-style: none;
+                    padding: 0;
+                }}
+                
+                .next-steps li {{
+                    padding: 8px 0;
+                    color: #388e3c;
+                    position: relative;
+                    padding-left: 25px;
+                }}
+                
+                .next-steps li::before {{
+                    content: "→";
+                    position: absolute;
+                    left: 0;
+                    color: #4caf50;
+                    font-weight: bold;
+                }}
+                
+                .actions {{
+                    margin-top: 30px;
+                }}
+                
+                .btn {{
+                    display: inline-block;
+                    padding: 12px 24px;
+                    margin: 0 10px;
+                    border-radius: 25px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                }}
+                
+                .btn-primary {{
+                    background: #00d4aa;
+                    color: white;
+                }}
+                
+                .btn-primary:hover {{
+                    background: #00b894;
+                    transform: translateY(-2px);
+                }}
+                
+                .btn-secondary {{
+                    background: #f8f9fa;
+                    color: #666;
+                    border: 1px solid #ddd;
+                }}
+                
+                .btn-secondary:hover {{
+                    background: #e9ecef;
+                    transform: translateY(-2px);
+                }}
+                
+                .timestamp {{
+                    color: #999;
+                    font-size: 12px;
+                    margin-top: 20px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="success-icon"></div>
+                <h1>🎉 OAuth Thành Công!</h1>
+                <p class="message">{message}</p>
+                
+                <div class="token-info">
+                    <h3>📋 Thông Tin Token</h3>
+                    <div class="info-row">
+                        <span class="info-label">Trạng thái:</span>
+                        <span class="info-value">✅ Đã lưu trữ an toàn</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Access Token:</span>
+                        <span class="info-value">
+                            <div class="token-preview">{data.get('access_token', '')[:20]}...</div>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Token Type:</span>
+                        <span class="info-value">{data.get('token_type', 'Bearer')}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Hết hạn:</span>
+                        <span class="info-value">{data.get('access_token_expire_in', 'N/A')}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Shop Name:</span>
+                        <span class="info-value">{data.get('seller_name', 'N/A')}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Region:</span>
+                        <span class="info-value">{data.get('seller_base_region', 'N/A')}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Open ID:</span>
+                        <span class="info-value">{data.get('open_id', 'N/A')}</span>
+                    </div>
+                </div>
+                
+                <div class="signature-info">
+                    <h3>🔐 API Signature</h3>
+                    <div class="info-row">
+                        <span class="info-label">App Key:</span>
+                        <span class="info-value">{Config.TIKTOK_CLIENT_KEY}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">App Secret:</span>
+                        <span class="info-value">
+                            <div class="token-preview">{Config.TIKTOK_CLIENT_SECRET[:10]}...</div>
+                        </span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">API Base URL:</span>
+                        <span class="info-value">{Config.TIKTOK_API_BASE_URL}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Signature Method:</span>
+                        <span class="info-value">HMAC-SHA256</span>
+                    </div>
+                </div>
+                
+                <div class="next-steps">
+                    <h3>🚀 Bước Tiếp Theo</h3>
+                    <ul>
+                        <li>Token đã được lưu trữ an toàn trong session</li>
+                        <li>Có thể bắt đầu gọi TikTok Shop API</li>
+                        <li>Nhớ refresh token trước khi hết hạn</li>
+                        <li>Kiểm tra scopes được cấp quyền</li>
+                    </ul>
+                </div>
+                
+                <div class="actions">
+                    <a href="/token/info" class="btn btn-primary">📊 Xem Token Info</a>
+                    <a href="/api/test-signed" class="btn btn-primary">🔐 Test Signed API</a>
+                    <a href="/" class="btn btn-secondary">🏠 Về Trang Chủ</a>
+                    <a href="/token/clear" class="btn btn-secondary">🗑️ Xóa Token</a>
+                </div>
+                
+                <div class="timestamp">
+                    Thời gian: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    else:
+        # Error page
+        error_details = data if isinstance(data, list) else [str(data)]
+        html = f"""
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>TikTok Shop OAuth - Lỗi</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }}
+                
+                .container {{
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    padding: 40px;
+                    max-width: 600px;
+                    width: 100%;
+                    text-align: center;
+                }}
+                
+                .error-icon {{
+                    width: 80px;
+                    height: 80px;
+                    background: #ff6b6b;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin: 0 auto 30px;
+                }}
+                
+                .error-icon::before {{
+                    content: "✗";
+                    color: white;
+                    font-size: 40px;
+                    font-weight: bold;
+                }}
+                
+                h1 {{
+                    color: #333;
+                    margin-bottom: 20px;
+                    font-size: 28px;
+                }}
+                
+                .message {{
+                    color: #666;
+                    margin-bottom: 30px;
+                    font-size: 16px;
+                    line-height: 1.6;
+                }}
+                
+                .error-details {{
+                    background: #fff5f5;
+                    border: 1px solid #fed7d7;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                    text-align: left;
+                }}
+                
+                .error-details h3 {{
+                    color: #c53030;
+                    margin-bottom: 15px;
+                    font-size: 18px;
+                }}
+                
+                .error-list {{
+                    list-style: none;
+                    padding: 0;
+                }}
+                
+                .error-list li {{
+                    padding: 8px 0;
+                    color: #e53e3e;
+                    position: relative;
+                    padding-left: 25px;
+                }}
+                
+                .error-list li::before {{
+                    content: "⚠";
+                    position: absolute;
+                    left: 0;
+                    color: #e53e3e;
+                }}
+                
+                .actions {{
+                    margin-top: 30px;
+                }}
+                
+                .btn {{
+                    display: inline-block;
+                    padding: 12px 24px;
+                    margin: 0 10px;
+                    border-radius: 25px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                }}
+                
+                .btn-primary {{
+                    background: #00d4aa;
+                    color: white;
+                }}
+                
+                .btn-primary:hover {{
+                    background: #00b894;
+                    transform: translateY(-2px);
+                }}
+                
+                .btn-secondary {{
+                    background: #f8f9fa;
+                    color: #666;
+                    border: 1px solid #ddd;
+                }}
+                
+                .btn-secondary:hover {{
+                    background: #e9ecef;
+                    transform: translateY(-2px);
+                }}
+                
+                .timestamp {{
+                    color: #999;
+                    font-size: 12px;
+                    margin-top: 20px;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="error-icon"></div>
+                <h1>❌ OAuth Thất Bại</h1>
+                <p class="message">Đã xảy ra lỗi trong quá trình xác thực OAuth</p>
+                
+                <div class="error-details">
+                    <h3>🔍 Chi Tiết Lỗi</h3>
+                    <ul class="error-list">
+                        {''.join([f'<li>{error}</li>' for error in error_details])}
+                    </ul>
+                </div>
+                
+                <div class="actions">
+                    <a href="/api/start-oauth" class="btn btn-primary">🔄 Thử Lại</a>
+                    <a href="/" class="btn btn-secondary">🏠 Về Trang Chủ</a>
+                </div>
+                
+                <div class="timestamp">
+                    Thời gian: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+    
+    return html
 
 @app.route('/token/info')
 @rate_limit(max_requests=10, time_window=60)
@@ -596,32 +1160,397 @@ def health_check():
 @app.route('/api/start-oauth')
 @rate_limit(max_requests=10, time_window=60)
 def start_oauth():
-    """API endpoint để bắt đầu OAuth flow"""
+    """Bắt đầu OAuth flow"""
     try:
-        # Generate secure state
+        # Generate state parameter for CSRF protection
         state = security_manager.generate_state()
+        
+        # Build OAuth URL
         oauth_url = Config.get_tiktok_auth_url(state)
         
-        logger.info(f"OAuth flow started từ IP: {request.remote_addr}")
+        logger.info(f"Redirecting to OAuth URL: {oauth_url}")
+        return redirect(oauth_url)
         
-        return jsonify({
-            'success': True,
-            'oauth_url': oauth_url,
-            'state': state,
-            'instructions': [
-                'Redirect user tới oauth_url',
-                'User sẽ authorize với TikTok Shop',
-                'TikTok sẽ redirect về callback URL với authorization code',
-                'Application sẽ exchange code cho access token'
-            ],
-            'timestamp': datetime.now().isoformat()
-        })
     except Exception as e:
-        logger.error(f"Error starting OAuth flow: {str(e)}")
+        logger.error(f"Lỗi khi tạo OAuth URL: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Không thể tạo OAuth URL',
-            'timestamp': datetime.now().isoformat()
+            'details': str(e)
+        }), 500
+
+@app.route('/api/test-signed')
+@rate_limit(max_requests=5, time_window=60)
+def test_signed_api():
+    """Test signed API request với TikTok Shop API"""
+    
+    # Kiểm tra xem có access token không
+    if 'access_token' not in session:
+        return jsonify({
+            'success': False,
+            'error': 'Chưa có access token. Vui lòng hoàn thành OAuth flow trước.'
+        }), 401
+    
+    try:
+        access_token = session['access_token']
+        
+        # Tạo signed request cho API get_authorized_shop
+        signed_request = create_signed_request(
+            access_token=access_token,
+            app_key=Config.TIKTOK_CLIENT_KEY,
+            app_secret=Config.TIKTOK_CLIENT_SECRET,
+            endpoint_path='/api/shop/get_authorized_shop',
+            params={
+                'access_token': access_token
+            }
+        )
+        
+        # Thực hiện request
+        response = requests.get(
+            signed_request['url'],
+            headers=signed_request['headers'],
+            timeout=(10, 30)
+        )
+        
+        # Parse response
+        if response.status_code == 200:
+            try:
+                api_response = response.json()
+                return jsonify({
+                    'success': True,
+                    'message': 'Signed API request thành công',
+                    'signed_request': {
+                        'url': signed_request['url'],
+                        'signature': signed_request['signature'],
+                        'params': signed_request['params'],
+                        'headers': signed_request['headers']
+                    },
+                    'api_response': api_response
+                })
+            except json.JSONDecodeError:
+                return jsonify({
+                    'success': False,
+                    'error': 'API response không phải JSON',
+                    'response_text': response.text[:500]
+                }), 400
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'API request failed với status {response.status_code}',
+                'response_text': response.text[:500],
+                'signed_request': {
+                    'url': signed_request['url'],
+                    'signature': signed_request['signature'],
+                    'params': signed_request['params']
+                }
+            }), response.status_code
+            
+    except Exception as e:
+        logger.error(f"Lỗi khi test signed API: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Lỗi khi thực hiện signed API request',
+            'details': str(e)
+        }), 500
+
+@app.route('/api/signature-demo')
+@rate_limit(max_requests=10, time_window=60)
+def signature_demo():
+    """Demo signature generation với giao diện đẹp"""
+    
+    # Kiểm tra xem có access token không
+    if 'access_token' not in session:
+        return """
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Signature Demo - Cần OAuth</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 20px;
+                }
+                .container {
+                    background: white;
+                    border-radius: 20px;
+                    padding: 40px;
+                    text-align: center;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                }
+                .btn {
+                    display: inline-block;
+                    padding: 12px 24px;
+                    background: #00d4aa;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 25px;
+                    font-weight: 600;
+                    margin: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔐 Signature Demo</h1>
+                <p>Bạn cần hoàn thành OAuth flow trước để xem signature demo.</p>
+                <a href="/api/start-oauth" class="btn">🚀 Bắt Đầu OAuth</a>
+                <a href="/" class="btn">🏠 Về Trang Chủ</a>
+            </div>
+        </body>
+        </html>
+        """
+    
+    try:
+        access_token = session['access_token']
+        
+        # Tạo signed request cho demo
+        signed_request = create_signed_request(
+            access_token=access_token,
+            app_key=Config.TIKTOK_CLIENT_KEY,
+            app_secret=Config.TIKTOK_CLIENT_SECRET,
+            endpoint_path='/api/shop/get_authorized_shop',
+            params={
+                'access_token': access_token
+            }
+        )
+        
+        return f"""
+        <!DOCTYPE html>
+        <html lang="vi">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Signature Demo - TikTok Shop API</title>
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                }}
+                
+                .container {{
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    background: white;
+                    border-radius: 20px;
+                    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                    overflow: hidden;
+                }}
+                
+                .header {{
+                    background: #00d4aa;
+                    color: white;
+                    padding: 30px;
+                    text-align: center;
+                }}
+                
+                .header h1 {{
+                    font-size: 2rem;
+                    margin-bottom: 10px;
+                }}
+                
+                .content {{
+                    padding: 30px;
+                }}
+                
+                .section {{
+                    margin-bottom: 30px;
+                    background: #f8f9fa;
+                    border-radius: 10px;
+                    padding: 20px;
+                }}
+                
+                .section h2 {{
+                    color: #333;
+                    margin-bottom: 15px;
+                    font-size: 1.3rem;
+                }}
+                
+                .code-block {{
+                    background: #2d3748;
+                    color: #e2e8f0;
+                    padding: 15px;
+                    border-radius: 8px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 14px;
+                    overflow-x: auto;
+                    margin: 10px 0;
+                }}
+                
+                .param-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 15px;
+                    margin: 15px 0;
+                }}
+                
+                .param-item {{
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    border-left: 4px solid #00d4aa;
+                }}
+                
+                .param-label {{
+                    font-weight: bold;
+                    color: #333;
+                    margin-bottom: 5px;
+                }}
+                
+                .param-value {{
+                    color: #666;
+                    word-break: break-all;
+                    font-family: monospace;
+                    font-size: 12px;
+                }}
+                
+                .signature-highlight {{
+                    background: #fff3e0;
+                    border: 2px solid #ff9800;
+                    border-radius: 8px;
+                    padding: 15px;
+                    margin: 15px 0;
+                }}
+                
+                .signature-highlight .param-value {{
+                    color: #e65100;
+                    font-weight: bold;
+                    font-size: 14px;
+                }}
+                
+                .actions {{
+                    text-align: center;
+                    margin-top: 30px;
+                }}
+                
+                .btn {{
+                    display: inline-block;
+                    padding: 12px 24px;
+                    margin: 0 10px;
+                    border-radius: 25px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    transition: all 0.3s ease;
+                }}
+                
+                .btn-primary {{
+                    background: #00d4aa;
+                    color: white;
+                }}
+                
+                .btn-primary:hover {{
+                    background: #00b894;
+                    transform: translateY(-2px);
+                }}
+                
+                .btn-secondary {{
+                    background: #f8f9fa;
+                    color: #666;
+                    border: 1px solid #ddd;
+                }}
+                
+                .btn-secondary:hover {{
+                    background: #e9ecef;
+                    transform: translateY(-2px);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🔐 TikTok Shop API Signature Demo</h1>
+                    <p>HMAC-SHA256 Signature Generation theo tài liệu chính thức</p>
+                </div>
+                
+                <div class="content">
+                    <div class="section">
+                        <h2>📋 Request Parameters</h2>
+                        <div class="param-grid">
+                            <div class="param-item">
+                                <div class="param-label">App Key</div>
+                                <div class="param-value">{Config.TIKTOK_CLIENT_KEY}</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Timestamp</div>
+                                <div class="param-value">{signed_request['params']['timestamp']}</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Version</div>
+                                <div class="param-value">{signed_request['params']['version']}</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Shop ID</div>
+                                <div class="param-value">{signed_request['params']['shop_id']}</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Access Token</div>
+                                <div class="param-value">{access_token[:20]}...</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>🔐 Generated Signature</h2>
+                        <div class="signature-highlight">
+                            <div class="param-label">HMAC-SHA256 Signature:</div>
+                            <div class="param-value">{signed_request['signature']}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>🌐 Final Request URL</h2>
+                        <div class="code-block">{signed_request['url']}</div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>📝 Request Headers</h2>
+                        <div class="code-block">
+{chr(10).join([f'{k}: {v}' for k, v in signed_request['headers'].items()])}
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>🔗 API Documentation</h2>
+                        <p>Signature generation tuân theo tài liệu chính thức của TikTok Shop Partner API:</p>
+                        <div class="code-block">
+                            <a href="https://partner.tiktokshop.com/docv2/page/sign-your-api-request" 
+                               target="_blank" style="color: #00d4aa;">
+                                https://partner.tiktokshop.com/docv2/page/sign-your-api-request
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="actions">
+                        <a href="/api/test-signed" class="btn btn-primary">🚀 Test API Request</a>
+                        <a href="/token/info" class="btn btn-secondary">📊 Token Info</a>
+                        <a href="/" class="btn btn-secondary">🏠 Về Trang Chủ</a>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+    except Exception as e:
+        logger.error(f"Lỗi khi tạo signature demo: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Lỗi khi tạo signature demo',
+            'details': str(e)
         }), 500
 
 # Error Handlers với enhanced logging và security

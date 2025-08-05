@@ -14,7 +14,7 @@ setup(
     packages=find_packages(),
     install_requires=[
         "Flask>=2.3.3",
-        "requests>=2.31.0", 
+        "requests>=2.31.0",
         "Werkzeug>=2.3.7",
         "python-dotenv>=1.0.0",
         "gunicorn>=21.2.0"

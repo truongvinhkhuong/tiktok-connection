@@ -3,8 +3,7 @@ version: '3.8'
 services:
   tiktok-oauth:
     build: .
-    ports:
-      - "5002:5002"
+    network_mode: host
     environment:
       - FLASK_ENV=production
       - FLASK_DEBUG=false
@@ -16,10 +15,6 @@ services:
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      - 1.1.1.1
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
       interval: 30s

@@ -117,6 +117,28 @@ def create_signed_request(access_token, app_key, app_secret, endpoint_path, para
         }
     }
 
+def generate_sample_signature(access_token):
+    """
+    Generate a sample signature for display purposes
+    :param access_token: OAuth access token
+    :return: Sample signature string
+    """
+    try:
+        # Tạo sample request cho API get_authorized_shop
+        sample_request = create_signed_request(
+            access_token=access_token,
+            app_key=Config.TIKTOK_CLIENT_KEY,
+            app_secret=Config.TIKTOK_CLIENT_SECRET,
+            endpoint_path='/api/shop/get_authorized_shop',
+            params={
+                'access_token': access_token
+            }
+        )
+        return sample_request['signature']
+    except Exception as e:
+        logger.error(f"Lỗi khi tạo sample signature: {str(e)}")
+        return "Error generating signature"
+
 # Cấu hình logging
 logging.basicConfig(
     level=logging.INFO,
@@ -654,19 +676,12 @@ def render_oauth_result_page(success, data, message=""):
                 .success-icon {{
                     width: 80px;
                     height: 80px;
-                    background: #00d4aa;
+                    background: #2A95BF;
                     border-radius: 50%;
                     display: flex;
                     align-items: center;
                     justify-content: center;
                     margin: 0 auto 30px;
-                    animation: pulse 2s infinite;
-                }}
-                
-                @keyframes pulse {{
-                    0% {{ transform: scale(1); }}
-                    50% {{ transform: scale(1.05); }}
-                    100% {{ transform: scale(1); }}
                 }}
                 
                 .success-icon::before {{
@@ -691,6 +706,7 @@ def render_oauth_result_page(success, data, message=""):
                 
                 .token-info {{
                     background: #f8f9fa;
+                    border: 1px solid #2A95BF;
                     border-radius: 10px;
                     padding: 20px;
                     margin: 20px 0;
@@ -698,7 +714,7 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .token-info h3 {{
-                    color: #333;
+                    color: #2A95BF;
                     margin-bottom: 15px;
                     font-size: 18px;
                 }}
@@ -727,18 +743,18 @@ def render_oauth_result_page(success, data, message=""):
                 
                 .token-preview {{
                     background: #e3f2fd;
-                    border: 1px solid #2196f3;
+                    border: 1px solid #2A95BF;
                     border-radius: 5px;
                     padding: 10px;
                     font-family: monospace;
                     font-size: 12px;
-                    color: #1976d2;
+                    color: #2A95BF;
                     word-break: break-all;
                 }}
                 
                 .signature-info {{
-                    background: #fff3e0;
-                    border: 1px solid #ff9800;
+                    background: #f8f9fa;
+                    border: 1px solid #2A95BF;
                     border-radius: 10px;
                     padding: 20px;
                     margin: 20px 0;
@@ -746,20 +762,133 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .signature-info h3 {{
-                    color: #e65100;
+                    color: #2A95BF;
                     margin-bottom: 15px;
                     font-size: 18px;
                 }}
                 
+                .signature-process {{
+                    background: #f8f9fa;
+                    border: 1px solid #2A95BF;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }}
+                
+                .signature-process h3 {{
+                    color: #2A95BF;
+                    margin-bottom: 20px;
+                    font-size: 18px;
+                }}
+                
+                .process-steps {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                }}
+                
+                .step {{
+                    display: flex;
+                    align-items: flex-start;
+                    gap: 15px;
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    border-left: 4px solid #2A95BF;
+                }}
+                
+                .step-number {{
+                    background: #2A95BF;
+                    color: white;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    font-size: 14px;
+                    flex-shrink: 0;
+                }}
+                
+                .step-content strong {{
+                    color: #2A95BF;
+                    display: block;
+                    margin-bottom: 5px;
+                    font-size: 14px;
+                }}
+                
+                .step-content p {{
+                    color: #666;
+                    font-size: 12px;
+                    margin: 0;
+                    line-height: 1.4;
+                }}
+                
+                .api-endpoints {{
+                    background: #f8f9fa;
+                    border: 1px solid #2A95BF;
+                    border-radius: 10px;
+                    padding: 20px;
+                    margin: 20px 0;
+                }}
+                
+                .api-endpoints h3 {{
+                    color: #2A95BF;
+                    margin-bottom: 20px;
+                    font-size: 18px;
+                }}
+                
+                .endpoint-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                    gap: 15px;
+                }}
+                
+                .endpoint-card {{
+                    background: white;
+                    border-radius: 8px;
+                    padding: 15px;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    border-left: 4px solid #2A95BF;
+                }}
+                
+                .endpoint-method {{
+                    background: #2A95BF;
+                    color: white;
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                    font-size: 12px;
+                    min-width: 50px;
+                    text-align: center;
+                }}
+                
+                .endpoint-details strong {{
+                    color: #2A95BF;
+                    display: block;
+                    margin-bottom: 5px;
+                    font-size: 14px;
+                }}
+                
+                .endpoint-details p {{
+                    color: #666;
+                    font-size: 12px;
+                    margin: 0;
+                }}
+                
                 .next-steps {{
-                    background: #e8f5e8;
+                    background: #f8f9fa;
+                    border: 1px solid #2A95BF;
                     border-radius: 10px;
                     padding: 20px;
                     margin: 20px 0;
                 }}
                 
                 .next-steps h3 {{
-                    color: #2e7d32;
+                    color: #2A95BF;
                     margin-bottom: 15px;
                 }}
                 
@@ -770,7 +899,7 @@ def render_oauth_result_page(success, data, message=""):
                 
                 .next-steps li {{
                     padding: 8px 0;
-                    color: #388e3c;
+                    color: #2A95BF;
                     position: relative;
                     padding-left: 25px;
                 }}
@@ -779,7 +908,7 @@ def render_oauth_result_page(success, data, message=""):
                     content: "→";
                     position: absolute;
                     left: 0;
-                    color: #4caf50;
+                    color: #2A95BF;
                     font-weight: bold;
                 }}
                 
@@ -801,12 +930,12 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .btn-primary {{
-                    background: #00d4aa;
+                    background: #2A95BF;
                     color: white;
                 }}
                 
                 .btn-primary:hover {{
-                    background: #00b894;
+                    background: #1a7a9e;
                     transform: translateY(-2px);
                 }}
                 
@@ -831,11 +960,11 @@ def render_oauth_result_page(success, data, message=""):
         <body>
             <div class="container">
                 <div class="success-icon"></div>
-                <h1>🎉 OAuth Thành Công!</h1>
+                <h1>OAuth Thành Công</h1>
                 <p class="message">{message}</p>
                 
                 <div class="token-info">
-                    <h3>📋 Thông Tin Token</h3>
+                    <h3>Thông Tin Token</h3>
                     <div class="info-row">
                         <span class="info-label">Trạng thái:</span>
                         <span class="info-value">✅ Đã lưu trữ an toàn</span>
@@ -843,7 +972,7 @@ def render_oauth_result_page(success, data, message=""):
                     <div class="info-row">
                         <span class="info-label">Access Token:</span>
                         <span class="info-value">
-                            <div class="token-preview">{data.get('access_token', '')[:20]}...</div>
+                            <div class="token-preview">{data.get('access_token', '')}</div>
                         </span>
                     </div>
                     <div class="info-row">
@@ -869,7 +998,7 @@ def render_oauth_result_page(success, data, message=""):
                 </div>
                 
                 <div class="signature-info">
-                    <h3>🔐 API Signature</h3>
+                    <h3>API Signature</h3>
                     <div class="info-row">
                         <span class="info-label">App Key:</span>
                         <span class="info-value">{Config.TIKTOK_CLIENT_KEY}</span>
@@ -877,7 +1006,7 @@ def render_oauth_result_page(success, data, message=""):
                     <div class="info-row">
                         <span class="info-label">App Secret:</span>
                         <span class="info-value">
-                            <div class="token-preview">{Config.TIKTOK_CLIENT_SECRET[:10]}...</div>
+                            <div class="token-preview">{Config.TIKTOK_CLIENT_SECRET}</div>
                         </span>
                     </div>
                     <div class="info-row">
@@ -888,23 +1017,106 @@ def render_oauth_result_page(success, data, message=""):
                         <span class="info-label">Signature Method:</span>
                         <span class="info-value">HMAC-SHA256</span>
                     </div>
+                    <div class="info-row">
+                        <span class="info-label">Sample Signature:</span>
+                        <span class="info-value">
+                            <div class="token-preview">{generate_sample_signature(data.get('access_token', ''))}</div>
+                        </span>
+                    </div>
                 </div>
                 
                 <div class="next-steps">
-                    <h3>🚀 Bước Tiếp Theo</h3>
+                    <h3>Bước Tiếp Theo</h3>
                     <ul>
                         <li>Token đã được lưu trữ an toàn trong session</li>
-                        <li>Có thể bắt đầu gọi TikTok Shop API</li>
+                        <li>Có thể bắt đầu gọi TikTok Shop API với signature</li>
                         <li>Nhớ refresh token trước khi hết hạn</li>
                         <li>Kiểm tra scopes được cấp quyền</li>
+                        <li>Sử dụng HMAC-SHA256 signature cho mọi API call</li>
                     </ul>
                 </div>
                 
+                <div class="signature-process">
+                    <h3>Signature Process</h3>
+                    <div class="process-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <strong>Extract Parameters</strong>
+                                <p>Lấy tất cả query parameters, loại trừ access_token và sign</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <strong>Sort & Concatenate</strong>
+                                <p>Sắp xếp theo alphabet và nối theo format {key}{value}</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <strong>Add Path & Body</strong>
+                                <p>Thêm API path và JSON body (nếu có)</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <strong>Wrap with Secret</strong>
+                                <p>Bọc string với app_secret ở đầu và cuối</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">5</div>
+                            <div class="step-content">
+                                <strong>HMAC-SHA256</strong>
+                                <p>Encode bằng HMAC-SHA256 để tạo signature</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="api-endpoints">
+                    <h3>Available API Endpoints</h3>
+                    <div class="endpoint-grid">
+                        <div class="endpoint-card">
+                            <div class="endpoint-method">GET</div>
+                            <div class="endpoint-details">
+                                <strong>/api/shop/get_authorized_shop</strong>
+                                <p>Lấy thông tin shop đã authorize</p>
+                            </div>
+                        </div>
+                        <div class="endpoint-card">
+                            <div class="endpoint-method">GET</div>
+                            <div class="endpoint-details">
+                                <strong>/api/shop/get_shop_list</strong>
+                                <p>Lấy danh sách tất cả shops</p>
+                            </div>
+                        </div>
+                        <div class="endpoint-card">
+                            <div class="endpoint-method">GET</div>
+                            <div class="endpoint-details">
+                                <strong>/api/order/get_order_list</strong>
+                                <p>Lấy danh sách orders</p>
+                            </div>
+                        </div>
+                        <div class="endpoint-card">
+                            <div class="endpoint-method">GET</div>
+                            <div class="endpoint-details">
+                                <strong>/api/product/get_product_list</strong>
+                                <p>Lấy danh sách products</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="actions">
-                    <a href="/token/info" class="btn btn-primary">📊 Xem Token Info</a>
-                    <a href="/api/test-signed" class="btn btn-primary">🔐 Test Signed API</a>
-                    <a href="/" class="btn btn-secondary">🏠 Về Trang Chủ</a>
-                    <a href="/token/clear" class="btn btn-secondary">🗑️ Xóa Token</a>
+                    <a href="/token/info" class="btn btn-primary">Xem Token Info</a>
+                    <a href="/api/signature-demo" class="btn btn-primary">Signature Demo</a>
+                    <a href="/api/test-signed" class="btn btn-primary">Test API</a>
+                    <a href="/" class="btn btn-secondary">Về Trang Chủ</a>
+                    <a href="/token/clear" class="btn btn-secondary">Xóa Token</a>
                 </div>
                 
                 <div class="timestamp">
@@ -983,8 +1195,8 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .error-details {{
-                    background: #fff5f5;
-                    border: 1px solid #fed7d7;
+                    background: #f8f9fa;
+                    border: 1px solid #2A95BF;
                     border-radius: 10px;
                     padding: 20px;
                     margin: 20px 0;
@@ -992,7 +1204,7 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .error-details h3 {{
-                    color: #c53030;
+                    color: #2A95BF;
                     margin-bottom: 15px;
                     font-size: 18px;
                 }}
@@ -1004,16 +1216,16 @@ def render_oauth_result_page(success, data, message=""):
                 
                 .error-list li {{
                     padding: 8px 0;
-                    color: #e53e3e;
+                    color: #2A95BF;
                     position: relative;
                     padding-left: 25px;
                 }}
                 
                 .error-list li::before {{
-                    content: "⚠";
+                    content: "→";
                     position: absolute;
                     left: 0;
-                    color: #e53e3e;
+                    color: #2A95BF;
                 }}
                 
                 .actions {{
@@ -1034,12 +1246,12 @@ def render_oauth_result_page(success, data, message=""):
                 }}
                 
                 .btn-primary {{
-                    background: #00d4aa;
+                    background: #2A95BF;
                     color: white;
                 }}
                 
                 .btn-primary:hover {{
-                    background: #00b894;
+                    background: #1a7a9e;
                     transform: translateY(-2px);
                 }}
                 
@@ -1064,7 +1276,7 @@ def render_oauth_result_page(success, data, message=""):
         <body>
             <div class="container">
                 <div class="error-icon"></div>
-                <h1>❌ OAuth Thất Bại</h1>
+                <h1>OAuth Thất Bại</h1>
                 <p class="message">Đã xảy ra lỗi trong quá trình xác thực OAuth</p>
                 
                 <div class="error-details">
@@ -1075,8 +1287,8 @@ def render_oauth_result_page(success, data, message=""):
                 </div>
                 
                 <div class="actions">
-                    <a href="/api/start-oauth" class="btn btn-primary">🔄 Thử Lại</a>
-                    <a href="/" class="btn btn-secondary">🏠 Về Trang Chủ</a>
+                    <a href="/api/start-oauth" class="btn btn-primary">Thử Lại</a>
+                    <a href="/" class="btn btn-secondary">Về Trang Chủ</a>
                 </div>
                 
                 <div class="timestamp">
@@ -1287,7 +1499,7 @@ def signature_demo():
                 .btn {
                     display: inline-block;
                     padding: 12px 24px;
-                    background: #00d4aa;
+                    background: #2A95BF;
                     color: white;
                     text-decoration: none;
                     border-radius: 25px;
@@ -1352,7 +1564,7 @@ def signature_demo():
                 }}
                 
                 .header {{
-                    background: #00d4aa;
+                    background: #2A95BF;
                     color: white;
                     padding: 30px;
                     text-align: center;
@@ -1402,7 +1614,7 @@ def signature_demo():
                     background: white;
                     padding: 15px;
                     border-radius: 8px;
-                    border-left: 4px solid #00d4aa;
+                    border-left: 4px solid #2A95BF;
                 }}
                 
                 .param-label {{
@@ -1448,12 +1660,12 @@ def signature_demo():
                 }}
                 
                 .btn-primary {{
-                    background: #00d4aa;
+                    background: #2A95BF;
                     color: white;
                 }}
                 
                 .btn-primary:hover {{
-                    background: #00b894;
+                    background: #1a7a9e;
                     transform: translateY(-2px);
                 }}
                 
@@ -1528,7 +1740,7 @@ def signature_demo():
                         <p>Signature generation tuân theo tài liệu chính thức của TikTok Shop Partner API:</p>
                         <div class="code-block">
                             <a href="https://partner.tiktokshop.com/docv2/page/sign-your-api-request" 
-                               target="_blank" style="color: #00d4aa;">
+                               target="_blank" style="color: #2A95BF;">
                                 https://partner.tiktokshop.com/docv2/page/sign-your-api-request
                             </a>
                         </div>

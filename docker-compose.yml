@@ -15,6 +15,9 @@ services:
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped
+    extra_hosts:
+      - "partner-api.tiktokshop.com:125.235.4.59"
+      - "partner.tiktokshop.com:23.36.145.50"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5002/health"]
       interval: 30s

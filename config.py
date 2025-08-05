@@ -25,8 +25,8 @@ class Config:
     
     # TikTok API URLs
     TIKTOK_AUTH_URL = 'https://partner.tiktokshop.com/authorization/oauth/auth'
-    TIKTOK_TOKEN_URL = 'https://partner-api.tiktokshop.com/authorization/v1/token'
-    TIKTOK_API_BASE_URL = 'https://partner-api.tiktokshop.com'
+    TIKTOK_TOKEN_URL = 'https://125.235.4.59/authorization/v1/token'  # Use IP directly
+    TIKTOK_API_BASE_URL = 'https://125.235.4.59'  # Use IP directly
     
     # OAuth Settings
     OAUTH_SCOPES = [

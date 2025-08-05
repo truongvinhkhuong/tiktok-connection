@@ -23,10 +23,10 @@ class Config:
     TIKTOK_CLIENT_SECRET = os.getenv('TIKTOK_CLIENT_SECRET')
     TIKTOK_REDIRECT_URI = os.getenv('TIKTOK_REDIRECT_URI', 'https://tiktok.truongvinhkhuong.io.vn/callback')
     
-    # TikTok API URLs
+    # TikTok API URLs - Based on official TikTok Shop Partner documentation
     TIKTOK_AUTH_URL = 'https://partner.tiktokshop.com/authorization/oauth/auth'
-    TIKTOK_TOKEN_URL = 'https://partner.tiktokshop.com/authorization/v1/token'  # Use working domain
-    TIKTOK_API_BASE_URL = 'https://partner.tiktokshop.com'  # Use working domain
+    TIKTOK_TOKEN_URL = 'https://auth.tiktok-shops.com/api/v2/token/get'  # Official endpoint from documentation
+    TIKTOK_API_BASE_URL = 'https://auth.tiktok-shops.com'
     
     # OAuth Settings
     OAUTH_SCOPES = [

@@ -83,19 +83,19 @@ def exchange_code_for_token(authorization_code):
     # Sanitize input
     authorization_code = security_manager.sanitize_input(authorization_code)
     
-    # Chuẩn bị data cho request
+    # Chuẩn bị data cho request theo TikTok Shop Partner documentation
     token_data = {
-        'grant_type': 'authorization_code',
-        'client_key': Config.TIKTOK_CLIENT_KEY,
-        'client_secret': Config.TIKTOK_CLIENT_SECRET,
-        'code': authorization_code,
-        'redirect_uri': Config.TIKTOK_REDIRECT_URI
+        'app_key': Config.TIKTOK_CLIENT_KEY,
+        'app_secret': Config.TIKTOK_CLIENT_SECRET,
+        'auth_code': authorization_code,
+        'grant_type': 'authorized_code'  # Note: 'authorized_code' not 'authorization_code'
     }
     
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'TikTokShopApp/1.0',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-TT-ENV': 'production'  # Add required header for TikTok Shop API
     }
     
     try:
@@ -104,7 +104,7 @@ def exchange_code_for_token(authorization_code):
         # Test DNS resolution
         import socket
         try:
-            host = 'partner.tiktokshop.com'
+            host = 'auth.tiktok-shops.com'
             ip = socket.gethostbyname(host)
             logger.info(f"DNS resolution successful: {host} -> {ip}")
         except socket.gaierror as e:
@@ -129,9 +129,13 @@ def exchange_code_for_token(authorization_code):
         session.mount("http://", adapter)
         session.mount("https://", adapter)
         
-        response = session.post(
-            Config.TIKTOK_TOKEN_URL,
-            data=token_data,
+        # Build URL with query parameters for GET request
+        import urllib.parse
+        query_string = urllib.parse.urlencode(token_data)
+        url = f"{Config.TIKTOK_TOKEN_URL}?{query_string}"
+        
+        response = session.get(
+            url,
             headers=headers,
             timeout=(10, 30)  # (connect_timeout, read_timeout)
         )

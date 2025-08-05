@@ -57,9 +57,9 @@ def validate_callback_params(code, state, error):
     # Validate authorization code
     if not code:
         errors.append("Thiếu authorization code")
-    elif len(code) < 10 or len(code) > 512:  # Reasonable bounds
+    elif len(code) < 10 or len(code) > 2048:  # Increased limit for TikTok's long codes
         errors.append("Authorization code có độ dài không hợp lệ")
-    elif not code.replace('-', '').replace('_', '').isalnum():
+    elif not code.replace('-', '').replace('_', '').replace('.', '').replace('+', '').replace('/', '').replace('=', '').isalnum():
         errors.append("Authorization code chứa ký tự không hợp lệ")
     
     # Enhanced state validation cho CSRF protection
@@ -426,6 +426,12 @@ def callback():
     user_agent = request.headers.get('User-Agent', 'Unknown')
     logger.info(f"OAuth callback từ IP: {ip_address}, User-Agent: {user_agent}")
     logger.info(f"Callback parameters: {dict(request.args)}")
+    
+    # Log code length for debugging
+    code = request.args.get('code', '').strip()
+    if code:
+        logger.info(f"Authorization code length: {len(code)}")
+        logger.info(f"Authorization code preview: {code[:50]}...")
     
     # Lấy parameters từ callback
     code = request.args.get('code', '').strip()

@@ -95,37 +95,24 @@ def exchange_code_for_token(authorization_code):
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'TikTokShopApp/1.0',
-        'Accept': 'application/json',
-        'Host': 'partner-api.tiktokshop.com'  # Add Host header for IP-based requests
+        'Accept': 'application/json'
     }
     
     try:
         logger.info(f"Gửi request lấy access token tới {Config.TIKTOK_TOKEN_URL}")
         
-        # Test connectivity to TikTok API
+        # Test DNS resolution
         import socket
         try:
-            # Test connection to TikTok API IP
-            test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            test_socket.settimeout(10)
-            result = test_socket.connect_ex(('125.235.4.59', 443))
-            test_socket.close()
-            
-            if result == 0:
-                logger.info("Connection to TikTok API successful")
-            else:
-                logger.error(f"Connection to TikTok API failed: {result}")
-                return {
-                    'success': False,
-                    'error': 'Không thể kết nối đến TikTok API',
-                    'details': f"Connection failed: {result}"
-                }
-        except Exception as e:
-            logger.error(f"Connection test failed: {e}")
+            host = 'partner.tiktokshop.com'
+            ip = socket.gethostbyname(host)
+            logger.info(f"DNS resolution successful: {host} -> {ip}")
+        except socket.gaierror as e:
+            logger.error(f"DNS resolution failed for {host}: {e}")
             return {
                 'success': False,
-                'error': 'Không thể test kết nối TikTok API',
-                'details': str(e)
+                'error': 'Không thể resolve domain TikTok',
+                'details': f"DNS resolution failed: {str(e)}"
             }
         
         # Use session with retry logic

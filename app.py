@@ -29,41 +29,49 @@ def generate_sign(request_option, app_secret):
     :param app_secret: Secret key for signing
     :return: Hexadecimal signature string
     """
-    # Step 1: Extract and filter query parameters, exclude "access_token" and "sign", sort alphabetically
+    # Step 1: Extract and filter query parameters, exclude "sign", sort alphabetically
     params = request_option.get('qs', {})
-    exclude_keys = ["access_token", "sign"]
+    exclude_keys = ["sign"]  # Don't exclude access_token, it's required for signature
     sorted_params = [
-        {"key": key, "value": params[key]}
+        {"key": key, "value": str(params[key])}  # Convert all values to string
         for key in sorted(params.keys())
         if key not in exclude_keys
     ]
 
     # Step 2: Concatenate parameters in {key}{value} format
     param_string = ''.join([f"{item['key']}{item['value']}" for item in sorted_params])
-    sign_string = param_string
 
-    # Step 3: Append API request path to the signature string
-    uri = request_option.get('uri', '')
-    pathname = urlparse(uri).path if uri else ''
-    sign_string = f"{pathname}{param_string}"
+    # Step 3: Get the API path (not full URL)
+    path = request_option.get('path', '')
+    if not path:
+        # Extract path from full URL if provided
+        uri = request_option.get('uri', '')
+        if uri:
+            from urllib.parse import urlparse
+            parsed = urlparse(uri)
+            path = parsed.path
+    
+    # Step 4: Combine path + parameters
+    sign_string = f"{path}{param_string}"
 
-    # Step 4: If not multipart/form-data and request body exists, append JSON-serialized body
+    # Step 5: If request body exists and not multipart, append JSON body
     content_type = request_option.get('headers', {}).get('content-type', '')
     body = request_option.get('body', {})
     if content_type != 'multipart/form-data' and body:
-        body_str = json.dumps(body)  # JSON serialization ensures consistency
+        body_str = json.dumps(body, separators=(',', ':'))  # Compact JSON
         sign_string += body_str
 
-    # Step 5: Wrap signature string with app_secret
+    # Step 6: Wrap signature string with app_secret
     wrapped_string = f"{app_secret}{sign_string}{app_secret}"
 
-    # Step 6: Encode using HMAC-SHA256 and generate hexadecimal signature
+    # Step 7: Encode using HMAC-SHA256 and generate hexadecimal signature
     hmac_obj = hmac.new(
         app_secret.encode('utf-8'),
         wrapped_string.encode('utf-8'),
         hashlib.sha256
     )
     sign = hmac_obj.hexdigest()
+    
     return sign
 
 def create_signed_request(access_token, app_key, app_secret, endpoint_path, params=None, body=None):
@@ -72,7 +80,7 @@ def create_signed_request(access_token, app_key, app_secret, endpoint_path, para
     :param access_token: OAuth access token
     :param app_key: App key
     :param app_secret: App secret
-    :param endpoint_path: API endpoint path (e.g., '/api/shop/get_authorized_shop')
+    :param endpoint_path: API endpoint path (e.g., '/product/202309/categories')
     :param params: Query parameters (optional)
     :param body: Request body (optional)
     :return: Dictionary with signed request details
@@ -82,14 +90,13 @@ def create_signed_request(access_token, app_key, app_secret, endpoint_path, para
     
     # Add required parameters
     params['app_key'] = app_key
+    params['access_token'] = access_token  # Add access_token to params
     params['timestamp'] = str(int(time.time()))
-    params['version'] = '2'
-    params['shop_id'] = '0'  # Default shop_id, can be overridden
     
     # Create request option for signature generation
     request_option = {
         'qs': params,
-        'uri': f"{Config.TIKTOK_API_BASE_URL}{endpoint_path}",
+        'path': endpoint_path,  # Use path instead of full URI
         'headers': {
             'content-type': 'application/json' if body else 'application/x-www-form-urlencoded'
         },
@@ -102,9 +109,10 @@ def create_signed_request(access_token, app_key, app_secret, endpoint_path, para
     # Add signature to params
     params['sign'] = signature
     
-    # Build final URL
+    # Build final URL with correct API base URL
+    api_base_url = 'https://open-api.tiktokglobalshop.com'  # Use correct API base URL
     query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
-    final_url = f"{Config.TIKTOK_API_BASE_URL}{endpoint_path}?{query_string}"
+    final_url = f"{api_base_url}{endpoint_path}?{query_string}"
     
     return {
         'url': final_url,
@@ -124,14 +132,19 @@ def generate_sample_signature(access_token):
     :return: Sample signature string
     """
     try:
-        # Tạo sample request cho API get_authorized_shop
+        # Tạo sample request cho API categories (endpoint thực tế)
         sample_request = create_signed_request(
             access_token=access_token,
             app_key=Config.TIKTOK_CLIENT_KEY,
             app_secret=Config.TIKTOK_CLIENT_SECRET,
-            endpoint_path='/api/shop/get_authorized_shop',
+            endpoint_path='/product/202309/categories',
             params={
-                'access_token': access_token
+                'locale': 'en-US',
+                'keyword': 'electronics',
+                'include_prohibited_categories': 'false',
+                'shop_cipher': 'GCP_XF90igAAAABh00qsWgtvOiGFNqyubMt3',
+                'category_version': 'v1',
+                'listing_platform': 'TIKTOK_SHOP'
             }
         )
         return sample_request['signature']
@@ -1444,14 +1457,19 @@ def test_signed_api():
     try:
         access_token = session['access_token']
         
-        # Tạo signed request cho API get_authorized_shop
+        # Tạo signed request cho API categories (endpoint thực tế từ TikTok)
         signed_request = create_signed_request(
             access_token=access_token,
             app_key=Config.TIKTOK_CLIENT_KEY,
             app_secret=Config.TIKTOK_CLIENT_SECRET,
-            endpoint_path='/api/shop/get_authorized_shop',
+            endpoint_path='/product/202309/categories',
             params={
-                'access_token': access_token
+                'locale': 'en-US',
+                'keyword': 'electronics',
+                'include_prohibited_categories': 'false',
+                'shop_cipher': 'GCP_XF90igAAAABh00qsWgtvOiGFNqyubMt3',
+                'category_version': 'v1',
+                'listing_platform': 'TIKTOK_SHOP'
             }
         )
         

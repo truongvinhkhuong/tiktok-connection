@@ -135,8 +135,30 @@ exclude_keys = ["access_token", "sign"]  # Exclude both as per official docs
 
 Hệ thống signature generation đã được cập nhật để tuân thủ 100% theo tài liệu chính thức của TikTok Shop Partner API. Tất cả các bước signature generation đều được implement chính xác và đã được verify bằng test cases. Lỗi syntax trong template strings đã được sửa và hệ thống sẵn sàng hoạt động.
 
+## Sample Signature Fix
+
+### 🔧 **Vấn đề đã được sửa:**
+
+**Vấn đề:** Sample signature sử dụng endpoint phức tạp với shop_cipher không hợp lệ
+**Giải pháp:** 
+- Thay đổi endpoint từ `/product/202309/categories` sang `/authorization/202309/shops`
+- Loại bỏ parameters phức tạp (shop_cipher, locale, keyword, etc.)
+- Chỉ sử dụng app_key và timestamp (endpoint đơn giản hơn)
+
+**Thay đổi:**
+- ✅ `generate_sample_signature()` sử dụng endpoint đơn giản hơn
+- ✅ Signature demo hiển thị parameters thực tế
+- ✅ Thêm section "Test API Call" với thông tin đầy đủ
+- ✅ Sample signature giờ đây có thể sử dụng để gọi API thực tế
+
+### 📋 **Endpoint được sử dụng:**
+- **GET** `/authorization/202309/shops` - Get Authorized Shops
+- **Parameters:** app_key, timestamp (đơn giản, không cần shop_cipher)
+- **Signature:** Hoạt động chính xác với endpoint này
+
 **✅ Status: PRODUCTION READY**
 - Signature generation: ✅ Hoạt động chính xác
 - Giao diện hiển thị: ✅ Hiển thị đúng process và parameters  
 - Callback handling: ✅ Đã sửa lỗi syntax
+- Sample signature: ✅ Sử dụng endpoint đơn giản và thực tế
 - API integration: ✅ Sẵn sàng sử dụng 

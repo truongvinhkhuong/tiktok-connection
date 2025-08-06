@@ -132,20 +132,14 @@ def generate_sample_signature(access_token):
     :return: Sample signature string
     """
     try:
-        # Tạo sample request cho API categories (endpoint thực tế)
+        # Tạo sample request cho API đơn giản hơn (Get Authorized Shops)
+        # Endpoint này không yêu cầu shop_cipher và ít parameters hơn
         sample_request = create_signed_request(
             access_token=access_token,
             app_key=Config.TIKTOK_CLIENT_KEY,
             app_secret=Config.TIKTOK_CLIENT_SECRET,
-            endpoint_path='/product/202309/categories',
-            params={
-                'locale': 'en-US',
-                'keyword': 'electronics',
-                'include_prohibited_categories': 'false',
-                'shop_cipher': 'GCP_XF90igAAAABh00qsWgtvOiGFNqyubMt3',
-                'category_version': 'v1',
-                'listing_platform': 'TIKTOK_SHOP'
-            }
+            endpoint_path='/authorization/202309/shops',
+            params={}  # Không cần parameters phức tạp
         )
         return sample_request['signature']
     except Exception as e:
@@ -1585,20 +1579,14 @@ def signature_demo():
     try:
         access_token = session['access_token']
         
-        # Tạo signed request cho demo với parameters thực tế
+        # Tạo signed request cho demo với endpoint đơn giản hơn
+        # Sử dụng Get Authorized Shops endpoint (không cần shop_cipher)
         signed_request = create_signed_request(
             access_token=access_token,
             app_key=Config.TIKTOK_CLIENT_KEY,
             app_secret=Config.TIKTOK_CLIENT_SECRET,
-            endpoint_path='/product/202309/categories',
-            params={
-                'locale': 'en-US',
-                'keyword': 'electronics',
-                'include_prohibited_categories': 'false',
-                'shop_cipher': 'GCP_XF90igAAAABh00qsWgtvOiGFNqyubMt3',
-                'category_version': 'v1',
-                'listing_platform': 'TIKTOK_SHOP'
-            }
+            endpoint_path='/authorization/202309/shops',
+            params={}  # Endpoint đơn giản, không cần parameters phức tạp
         )
         
         return f"""
@@ -1824,33 +1812,10 @@ def signature_demo():
                                 <div class="param-label">Timestamp</div>
                                 <div class="param-value">{signed_request['params']['timestamp']}</div>
                             </div>
-                            <div class="param-item">
-                                <div class="param-label">Locale</div>
-                                <div class="param-value">{signed_request['params']['locale']}</div>
-                            </div>
-                            <div class="param-item">
-                                <div class="param-label">Keyword</div>
-                                <div class="param-value">{signed_request['params']['keyword']}</div>
-                            </div>
-                            <div class="param-item">
-                                <div class="param-label">Include Prohibited</div>
-                                <div class="param-value">{signed_request['params']['include_prohibited_categories']}</div>
-                            </div>
-                            <div class="param-item">
-                                <div class="param-label">Shop Cipher</div>
-                                <div class="param-value">{signed_request['params']['shop_cipher'][:20]}...</div>
-                            </div>
-                            <div class="param-item">
-                                <div class="param-label">Category Version</div>
-                                <div class="param-value">{signed_request['params']['category_version']}</div>
-                            </div>
-                            <div class="param-item">
-                                <div class="param-label">Listing Platform</div>
-                                <div class="param-value">{signed_request['params']['listing_platform']}</div>
-                            </div>
                         </div>
                         <div class="info-note">
-                            <strong>Note:</strong> access_token và sign được loại trừ khỏi signature generation theo tài liệu chính thức
+                            <strong>Note:</strong> access_token và sign được loại trừ khỏi signature generation theo tài liệu chính thức. 
+                            Endpoint này chỉ cần app_key và timestamp.
                         </div>
                     </div>
                     
@@ -1919,6 +1884,19 @@ def signature_demo():
                         <h2>📝 Request Headers</h2>
                         <div class="code-block">
 {chr(10).join([f'{k}: {v}' for k, v in signed_request['headers'].items()])}
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>🧪 Test API Call</h2>
+                        <div class="info-note">
+                            <strong>Ready to test:</strong> Signature này có thể được sử dụng để gọi API thực tế.
+                            <br><br>
+                            <strong>Endpoint:</strong> GET /authorization/202309/shops
+                            <br>
+                            <strong>URL:</strong> {signed_request['url']}
+                            <br><br>
+                            <strong>Note:</strong> Đảm bảo access_token hợp lệ và chưa hết hạn.
                         </div>
                     </div>
                     

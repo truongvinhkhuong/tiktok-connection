@@ -1086,7 +1086,7 @@ def render_oauth_result_page(success, data, message=""):
                             <div class="step-number">2</div>
                             <div class="step-content">
                                 <strong>Sort & Concatenate</strong>
-                                <p>Sắp xếp theo alphabet và nối theo format {key}{value}</p>
+                                <p>Sắp xếp theo alphabet và nối theo format keyvalue</p>
                             </div>
                         </div>
                         <div class="step">

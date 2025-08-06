@@ -433,7 +433,7 @@ def index():
             }}
             
             .oauth-button {{
-                display: inline-block;
+             display: inline-block;
                 background: linear-gradient(45deg, #2A95BF, #1a7a9e);
                 color: white;
                 padding: 15px 30px;

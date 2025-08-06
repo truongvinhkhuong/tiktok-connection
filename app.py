@@ -29,9 +29,9 @@ def generate_sign(request_option, app_secret):
     :param app_secret: Secret key for signing
     :return: Hexadecimal signature string
     """
-    # Step 1: Extract and filter query parameters, exclude "sign", sort alphabetically
+    # Step 1: Extract and filter query parameters, exclude "access_token" and "sign", sort alphabetically
     params = request_option.get('qs', {})
-    exclude_keys = ["sign"]  # Don't exclude access_token, it's required for signature
+    exclude_keys = ["access_token", "sign"]
     sorted_params = [
         {"key": key, "value": str(params[key])}  # Convert all values to string
         for key in sorted(params.keys())
@@ -40,31 +40,27 @@ def generate_sign(request_option, app_secret):
 
     # Step 2: Concatenate parameters in {key}{value} format
     param_string = ''.join([f"{item['key']}{item['value']}" for item in sorted_params])
+    sign_string = param_string
 
-    # Step 3: Get the API path (not full URL)
-    path = request_option.get('path', '')
-    if not path:
-        # Extract path from full URL if provided
-        uri = request_option.get('uri', '')
-        if uri:
-            from urllib.parse import urlparse
-            parsed = urlparse(uri)
-            path = parsed.path
-    
-    # Step 4: Combine path + parameters
-    sign_string = f"{path}{param_string}"
+    # Step 3: Append API request path to the signature string
+    uri = request_option.get('uri', '')
+    pathname = urlparse(uri).path if uri else ''
+    if not pathname:
+        # Fallback to path if uri is not provided
+        pathname = request_option.get('path', '')
+    sign_string = f"{pathname}{param_string}"
 
-    # Step 5: If request body exists and not multipart, append JSON body
+    # Step 4: If not multipart/form-data and request body exists, append JSON-serialized body
     content_type = request_option.get('headers', {}).get('content-type', '')
     body = request_option.get('body', {})
     if content_type != 'multipart/form-data' and body:
-        body_str = json.dumps(body, separators=(',', ':'))  # Compact JSON
+        body_str = json.dumps(body)  # JSON serialization ensures consistency
         sign_string += body_str
 
-    # Step 6: Wrap signature string with app_secret
+    # Step 5: Wrap signature string with app_secret
     wrapped_string = f"{app_secret}{sign_string}{app_secret}"
 
-    # Step 7: Encode using HMAC-SHA256 and generate hexadecimal signature
+    # Step 6: Encode using HMAC-SHA256 and generate hexadecimal signature
     hmac_obj = hmac.new(
         app_secret.encode('utf-8'),
         wrapped_string.encode('utf-8'),
@@ -93,10 +89,14 @@ def create_signed_request(access_token, app_key, app_secret, endpoint_path, para
     params['access_token'] = access_token  # Add access_token to params
     params['timestamp'] = str(int(time.time()))
     
+    # Build the full URI for signature generation
+    api_base_url = 'https://open-api.tiktokglobalshop.com'
+    full_uri = f"{api_base_url}{endpoint_path}"
+    
     # Create request option for signature generation
     request_option = {
         'qs': params,
-        'path': endpoint_path,  # Use path instead of full URI
+        'uri': full_uri,  # Use full URI for signature generation
         'headers': {
             'content-type': 'application/json' if body else 'application/x-www-form-urlencoded'
         },
@@ -1092,35 +1092,42 @@ def render_oauth_result_page(success, data, message=""):
                             <div class="step-number">1</div>
                             <div class="step-content">
                                 <strong>Extract Parameters</strong>
-                                <p>Lấy tất cả query parameters, loại trừ access_token và sign</p>
+                                <p>Lấy tất cả query parameters, loại trừ "access_token" và "sign", sắp xếp theo alphabet</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">2</div>
                             <div class="step-content">
-                                <strong>Sort & Concatenate</strong>
-                                <p>Sắp xếp theo alphabet và nối theo format keyvalue</p>
+                                <strong>Concatenate Parameters</strong>
+                                <p>Nối parameters theo format {key}{value} (ví dụ: app_key123456localeen-US)</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">3</div>
                             <div class="step-content">
-                                <strong>Add Path & Body</strong>
-                                <p>Thêm API path và JSON body (nếu có)</p>
+                                <strong>Add API Path</strong>
+                                <p>Thêm API request path vào đầu string (ví dụ: /product/202309/categories)</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">4</div>
                             <div class="step-content">
-                                <strong>Wrap with Secret</strong>
-                                <p>Bọc string với app_secret ở đầu và cuối</p>
+                                <strong>Add Request Body</strong>
+                                <p>Nếu có request body (không phải multipart), thêm JSON-serialized body</p>
                             </div>
                         </div>
                         <div class="step">
                             <div class="step-number">5</div>
                             <div class="step-content">
+                                <strong>Wrap with Secret</strong>
+                                <p>Bọc string với app_secret ở đầu và cuối: {app_secret}string{app_secret}</p>
+                            </div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">6</div>
+                            <div class="step-content">
                                 <strong>HMAC-SHA256</strong>
-                                <p>Encode bằng HMAC-SHA256 để tạo signature</p>
+                                <p>Encode bằng HMAC-SHA256 để tạo signature hex string</p>
                             </div>
                         </div>
                     </div>
@@ -1578,14 +1585,19 @@ def signature_demo():
     try:
         access_token = session['access_token']
         
-        # Tạo signed request cho demo
+        # Tạo signed request cho demo với parameters thực tế
         signed_request = create_signed_request(
             access_token=access_token,
             app_key=Config.TIKTOK_CLIENT_KEY,
             app_secret=Config.TIKTOK_CLIENT_SECRET,
-            endpoint_path='/api/shop/get_authorized_shop',
+            endpoint_path='/product/202309/categories',
             params={
-                'access_token': access_token
+                'locale': 'en-US',
+                'keyword': 'electronics',
+                'include_prohibited_categories': 'false',
+                'shop_cipher': 'GCP_XF90igAAAABh00qsWgtvOiGFNqyubMt3',
+                'category_version': 'v1',
+                'listing_platform': 'TIKTOK_SHOP'
             }
         )
         
@@ -1735,6 +1747,62 @@ def signature_demo():
                     background: #e9ecef;
                     transform: translateY(-2px);
                 }}
+                
+                .process-steps {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 15px;
+                    margin: 15px 0;
+                }}
+                
+                .step {{
+                    display: flex;
+                    align-items: flex-start;
+                    background: white;
+                    padding: 15px;
+                    border-radius: 8px;
+                    border-left: 4px solid #2A95BF;
+                }}
+                
+                .step-number {{
+                    background: #2A95BF;
+                    color: white;
+                    width: 30px;
+                    height: 30px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-weight: bold;
+                    margin-right: 15px;
+                    flex-shrink: 0;
+                }}
+                
+                .step-content {{
+                    flex: 1;
+                }}
+                
+                .step-content strong {{
+                    color: #333;
+                    display: block;
+                    margin-bottom: 5px;
+                }}
+                
+                .step-content p {{
+                    color: #666;
+                    margin: 0;
+                    font-size: 14px;
+                }}
+                
+                .info-note {{
+                    background: #e3f2fd;
+                    border: 1px solid #2196f3;
+                    border-radius: 8px;
+                    padding: 10px;
+                    margin: 15px 0;
+                    color: #1976d2;
+                    font-size: 14px;
+                }}
             </style>
         </head>
         <body>
@@ -1746,28 +1814,43 @@ def signature_demo():
                 
                 <div class="content">
                     <div class="section">
-                        <h2>📋 Request Parameters</h2>
+                        <h2>📋 Request Parameters (Excluding access_token & sign)</h2>
                         <div class="param-grid">
                             <div class="param-item">
                                 <div class="param-label">App Key</div>
-                                <div class="param-value">{Config.TIKTOK_CLIENT_KEY}</div>
+                                <div class="param-value">{signed_request['params']['app_key']}</div>
                             </div>
                             <div class="param-item">
                                 <div class="param-label">Timestamp</div>
                                 <div class="param-value">{signed_request['params']['timestamp']}</div>
                             </div>
                             <div class="param-item">
-                                <div class="param-label">Version</div>
-                                <div class="param-value">{signed_request['params']['version']}</div>
+                                <div class="param-label">Locale</div>
+                                <div class="param-value">{signed_request['params']['locale']}</div>
                             </div>
                             <div class="param-item">
-                                <div class="param-label">Shop ID</div>
-                                <div class="param-value">{signed_request['params']['shop_id']}</div>
+                                <div class="param-label">Keyword</div>
+                                <div class="param-value">{signed_request['params']['keyword']}</div>
                             </div>
                             <div class="param-item">
-                                <div class="param-label">Access Token</div>
-                                <div class="param-value">{access_token[:20]}...</div>
+                                <div class="param-label">Include Prohibited</div>
+                                <div class="param-value">{signed_request['params']['include_prohibited_categories']}</div>
                             </div>
+                            <div class="param-item">
+                                <div class="param-label">Shop Cipher</div>
+                                <div class="param-value">{signed_request['params']['shop_cipher'][:20]}...</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Category Version</div>
+                                <div class="param-value">{signed_request['params']['category_version']}</div>
+                            </div>
+                            <div class="param-item">
+                                <div class="param-label">Listing Platform</div>
+                                <div class="param-value">{signed_request['params']['listing_platform']}</div>
+                            </div>
+                        </div>
+                        <div class="info-note">
+                            <strong>Note:</strong> access_token và sign được loại trừ khỏi signature generation theo tài liệu chính thức
                         </div>
                     </div>
                     
@@ -1776,6 +1859,54 @@ def signature_demo():
                         <div class="signature-highlight">
                             <div class="param-label">HMAC-SHA256 Signature:</div>
                             <div class="param-value">{signed_request['signature']}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>📝 Signature Generation Process</h2>
+                        <div class="process-steps">
+                            <div class="step">
+                                <div class="step-number">1</div>
+                                <div class="step-content">
+                                    <strong>Extract Parameters</strong>
+                                    <p>Lấy tất cả query parameters, loại trừ "access_token" và "sign", sắp xếp theo alphabet</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">2</div>
+                                <div class="step-content">
+                                    <strong>Concatenate Parameters</strong>
+                                    <p>Nối parameters theo format {key}{value} (ví dụ: app_key123456localeen-US)</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">3</div>
+                                <div class="step-content">
+                                    <strong>Add API Path</strong>
+                                    <p>Thêm API request path vào đầu string (ví dụ: /product/202309/categories)</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">4</div>
+                                <div class="step-content">
+                                    <strong>Add Request Body</strong>
+                                    <p>Nếu có request body (không phải multipart), thêm JSON-serialized body</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">5</div>
+                                <div class="step-content">
+                                    <strong>Wrap with Secret</strong>
+                                    <p>Bọc string với app_secret ở đầu và cuối: {app_secret}string{app_secret}</p>
+                                </div>
+                            </div>
+                            <div class="step">
+                                <div class="step-number">6</div>
+                                <div class="step-content">
+                                    <strong>HMAC-SHA256</strong>
+                                    <p>Encode bằng HMAC-SHA256 để tạo signature hex string</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     

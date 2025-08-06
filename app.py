@@ -1332,9 +1332,8 @@ def render_oauth_result_page(success, data, message=""):
                 <div class="error-details">
                     <h3>Chi Tiết Lỗi</h3>
                     <ul class="error-list">
-                        <li>{data.get('error', 'Lỗi không xác định')}</li>
-                        <li>{data.get('message', 'Đã xảy ra lỗi không mong muốn')}</li>
-                        {f'<li>Gợi ý: {data.get("suggestion", "")}</li>' if data.get('suggestion') else ''}
+                        {''.join([f'<li>{error}</li>' for error in (data if isinstance(data, list) else [str(data)])])}
+                        {f'<li>Gợi ý: {message}</li>' if message else ''}
                     </ul>
                 </div>
                 

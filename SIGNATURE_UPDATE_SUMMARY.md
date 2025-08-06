@@ -100,6 +100,15 @@ exclude_keys = ["access_token", "sign"]  # Exclude both as per official docs
 **Files đã sửa:**
 - `app.py` - 4 locations trong template strings
 
+### Lỗi Error Handling trong render_oauth_result_page
+**Vấn đề:** Lỗi `'list' object has no attribute 'get'` trong callback
+**Nguyên nhân:** Truyền list vào `render_oauth_result_page` nhưng cố gắng gọi `.get()` trên list
+**Giải pháp:** Sửa error handling để xử lý cả list và dict:
+- Thay `data.get('error')` bằng xử lý list: `''.join([f'<li>{error}</li>' for error in (data if isinstance(data, list) else [str(data)])])`
+
+**Files đã sửa:**
+- `app.py` - Error handling trong `render_oauth_result_page()`
+
 ## Verification Results
 
 ### ✅ **Signature Generation Verification**
@@ -159,6 +168,7 @@ Hệ thống signature generation đã được cập nhật để tuân thủ 1
 **✅ Status: PRODUCTION READY**
 - Signature generation: ✅ Hoạt động chính xác
 - Giao diện hiển thị: ✅ Hiển thị đúng process và parameters  
-- Callback handling: ✅ Đã sửa lỗi syntax
+- Callback handling: ✅ Đã sửa tất cả lỗi syntax và error handling
 - Sample signature: ✅ Sử dụng endpoint đơn giản và thực tế
-- API integration: ✅ Sẵn sàng sử dụng 
+- API integration: ✅ Sẵn sàng sử dụng
+- Error handling: ✅ Xử lý đúng cả list và dict trong error pages 

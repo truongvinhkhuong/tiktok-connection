@@ -214,6 +214,11 @@ def exchange_code_for_token(authorization_code):
         'grant_type': 'authorized_code'  # Note: 'authorized_code' not 'authorization_code'
     }
     
+    # Debug: Log app key (masked) and code length
+    masked_app_key = Config.TIKTOK_CLIENT_KEY[:4] + '*' * (len(Config.TIKTOK_CLIENT_KEY) - 8) + Config.TIKTOK_CLIENT_KEY[-4:] if len(Config.TIKTOK_CLIENT_KEY) > 8 else '***'
+    logger.info(f"App Key: {masked_app_key}, Code length: {len(authorization_code)}")
+    logger.info(f"Token URL: {Config.TIKTOK_TOKEN_URL}")
+    
     headers = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'TikTokShopApp/1.0',
@@ -288,11 +293,42 @@ def exchange_code_for_token(authorization_code):
                 }
             else:
                 logger.error(f"Response không chứa access_token: {token_response}")
-                return {
-                    'success': False,
-                    'error': 'Response không hợp lệ từ TikTok',
-                    'details': token_response
-                }
+                
+                # Handle specific TikTok error codes
+                if 'code' in token_response:
+                    error_code = token_response.get('code')
+                    error_message = token_response.get('message', 'Unknown error')
+                    
+                    if error_code == 36004004:
+                        return {
+                            'success': False,
+                            'error': 'Authorization code không hợp lệ',
+                            'message': f'Code đã hết hạn hoặc đã được sử dụng. Error: {error_message}',
+                            'details': token_response,
+                            'suggestion': 'Vui lòng thử lại OAuth flow từ đầu'
+                        }
+                    elif error_code == 36004001:
+                        return {
+                            'success': False,
+                            'error': 'App key không hợp lệ',
+                            'message': f'App key hoặc app secret không đúng. Error: {error_message}',
+                            'details': token_response,
+                            'suggestion': 'Kiểm tra lại TIKTOK_CLIENT_KEY và TIKTOK_CLIENT_SECRET'
+                        }
+                    else:
+                        return {
+                            'success': False,
+                            'error': f'TikTok API Error {error_code}',
+                            'message': f'Error: {error_message}',
+                            'details': token_response,
+                            'suggestion': 'Kiểm tra TikTok API documentation'
+                        }
+                else:
+                    return {
+                        'success': False,
+                        'error': 'Response không hợp lệ từ TikTok',
+                        'details': token_response
+                    }
         else:
             error_data = response.text
             try:
@@ -1280,9 +1316,11 @@ def render_oauth_result_page(success, data, message=""):
                 <p class="message">Đã xảy ra lỗi trong quá trình xác thực OAuth</p>
                 
                 <div class="error-details">
-                    <h3>🔍 Chi Tiết Lỗi</h3>
+                    <h3>Chi Tiết Lỗi</h3>
                     <ul class="error-list">
-                        {''.join([f'<li>{error}</li>' for error in error_details])}
+                        <li>{data.get('error', 'Lỗi không xác định')}</li>
+                        <li>{data.get('message', 'Đã xảy ra lỗi không mong muốn')}</li>
+                        {f'<li>Gợi ý: {data.get("suggestion", "")}</li>' if data.get('suggestion') else ''}
                     </ul>
                 </div>
                 

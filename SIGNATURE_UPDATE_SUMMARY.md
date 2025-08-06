@@ -88,6 +88,18 @@ exclude_keys = ["access_token", "sign"]  # Exclude both as per official docs
 - [TikTok Shop Partner API Documentation](https://partner.tiktokshop.com/docv2/page/sign-your-api-request)
 - HMAC-SHA256 signature generation theo chuẩn chính thức
 
+## Bug Fixes
+
+### Lỗi Template String Syntax
+**Vấn đề:** Lỗi `NameError: name 'key' is not defined` trong callback
+**Nguyên nhân:** Template string sử dụng `{key}{value}` và `{app_secret}` trong f-string
+**Giải pháp:** Thay thế bằng text literal:
+- `{key}{value}` → `keyvalue`
+- `{app_secret}string{app_secret}` → `app_secret + string + app_secret`
+
+**Files đã sửa:**
+- `app.py` - 4 locations trong template strings
+
 ## Kết luận
 
-Hệ thống signature generation đã được cập nhật để tuân thủ 100% theo tài liệu chính thức của TikTok Shop Partner API. Tất cả các bước signature generation đều được implement chính xác và đã được verify bằng test cases. 
+Hệ thống signature generation đã được cập nhật để tuân thủ 100% theo tài liệu chính thức của TikTok Shop Partner API. Tất cả các bước signature generation đều được implement chính xác và đã được verify bằng test cases. Lỗi syntax trong template strings đã được sửa và hệ thống sẵn sàng hoạt động. 

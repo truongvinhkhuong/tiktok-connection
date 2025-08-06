@@ -1099,7 +1099,7 @@ def render_oauth_result_page(success, data, message=""):
                             <div class="step-number">2</div>
                             <div class="step-content">
                                 <strong>Concatenate Parameters</strong>
-                                <p>Nối parameters theo format {key}{value} (ví dụ: app_key123456localeen-US)</p>
+                                <p>Nối parameters theo format keyvalue (ví dụ: app_key123456localeen-US)</p>
                             </div>
                         </div>
                         <div class="step">
@@ -1120,7 +1120,7 @@ def render_oauth_result_page(success, data, message=""):
                             <div class="step-number">5</div>
                             <div class="step-content">
                                 <strong>Wrap with Secret</strong>
-                                <p>Bọc string với app_secret ở đầu và cuối: {app_secret}string{app_secret}</p>
+                                <p>Bọc string với app_secret ở đầu và cuối: app_secret + string + app_secret</p>
                             </div>
                         </div>
                         <div class="step">
@@ -1876,7 +1876,7 @@ def signature_demo():
                                 <div class="step-number">2</div>
                                 <div class="step-content">
                                     <strong>Concatenate Parameters</strong>
-                                    <p>Nối parameters theo format {key}{value} (ví dụ: app_key123456localeen-US)</p>
+                                    <p>Nối parameters theo format keyvalue (ví dụ: app_key123456localeen-US)</p>
                                 </div>
                             </div>
                             <div class="step">
@@ -1897,7 +1897,7 @@ def signature_demo():
                                 <div class="step-number">5</div>
                                 <div class="step-content">
                                     <strong>Wrap with Secret</strong>
-                                    <p>Bọc string với app_secret ở đầu và cuối: {app_secret}string{app_secret}</p>
+                                    <p>Bọc string với app_secret ở đầu và cuối: app_secret + string + app_secret</p>
                                 </div>
                             </div>
                             <div class="step">
